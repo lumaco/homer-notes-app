@@ -19,38 +19,77 @@ export default function App() {
   const [notes, setNotes] = useState([]);
   const [draft, setDraft] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
-  const [viewer, setViewer] = useState(null); // {src, text}
+  const [viewer, setViewer] = useState(null);
 
   const isCoarse = mm("(pointer: coarse)");
 
   /* DnD state (handle-based) */
-  const dragging = useRef(null);       // {id}
-  const longPressTimer = useRef(null);  // mobile long-press
+  const dragging = useRef(null);
+  const longPressTimer = useRef(null);
 
-  /* Storage (temporaneo: localStorage) */
-  useEffect(() => {
+  /* Fetch notes from Neon */
+  const fetchNotes = async () => {
     try {
-      const saved = JSON.parse(localStorage.getItem("notes") || "[]");
-      setNotes(Array.isArray(saved) ? saved : []);
-    } catch { setNotes([]); }
-  }, []);
-  const saveNotes = (arr) => {
-    setNotes(arr);
-    try { localStorage.setItem("notes", JSON.stringify(arr)); } catch {}
+      const res = await fetch("/api/getNotes");
+      if (!res.ok) throw new Error("Errore caricamento note");
+      const data = await res.json();
+      setNotes(data);
+    } catch (err) {
+      console.error(err);
+      alert("Errore caricamento note dal server");
+    }
   };
 
-  /* CRUD */
-  const createNote = () => {
+  useEffect(() => { fetchNotes(); }, []);
+
+  /* CRUD Neon */
+  const createNote = async () => {
     if (!draft.trim() && !imagePreview) return;
-    const n = { id: uid(), text: draft.trim(), imageUrl: imagePreview, createdAt: Date.now() };
-    saveNotes([n, ...notes]);
-    setDraft(""); setImagePreview(null);
+    try {
+      const res = await fetch("/api/addNote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: draft.trim(), image_url: imagePreview }),
+      });
+      if (!res.ok) throw new Error("Errore creazione nota");
+      const newNote = await res.json();
+      setNotes((prev) => [newNote, ...prev]);
+      setDraft(""); setImagePreview(null);
+    } catch (err) {
+      console.error(err);
+      alert("Errore salvataggio nota");
+    }
   };
-  const onDelete = (id) => saveNotes(notes.filter((n) => n.id !== id));
-  const onEdit = (note) => {
+
+  const onDelete = async (id) => {
+    try {
+      const res = await fetch(`/api/deleteNote?id=${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Errore eliminazione nota");
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Errore eliminazione nota");
+    }
+  };
+
+  const onEdit = async (note) => {
     const v = prompt("Modifica nota:", note.text || "");
-    if (v !== null) saveNotes(notes.map((n) => (n.id === note.id ? { ...n, text: v } : n)));
+    if (v === null) return;
+    try {
+      const res = await fetch("/api/updateNote", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: note.id, text: v, image_url: note.image_url }),
+      });
+      if (!res.ok) throw new Error("Errore modifica nota");
+      const updated = await res.json();
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+    } catch (err) {
+      console.error(err);
+      alert("Errore modifica nota");
+    }
   };
+
   const onShare = (note) => {
     const url = `${window.location.origin}/n/${note.id}`;
     if (navigator.share) navigator.share({ title: "Nota", text: note.text, url });
@@ -59,14 +98,13 @@ export default function App() {
 
   /* Clipboard & File */
   const onPasteText = async () => {
-  try {
-    const text = await navigator.clipboard.readText();
-    setDraft((p) => p + text);
-  } catch {
-    alert("Permessi clipboard mancanti.");
-  }
-};
-
+    try {
+      const text = await navigator.clipboard.readText();
+      setDraft((p) => p + text);
+    } catch {
+      alert("Permessi clipboard mancanti.");
+    }
+  };
   const onFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -75,19 +113,21 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  /* Reorder */
+  /* Reorder (solo lato client per ora) */
   const reorder = (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
-    const arr = [...notes];
-    const a = arr.findIndex((n) => n.id === fromId);
-    const b = arr.findIndex((n) => n.id === toId);
-    if (a < 0 || b < 0) return;
-    const [moved] = arr.splice(a, 1);
-    arr.splice(b, 0, moved);
-    saveNotes(arr);
+    setNotes((prev) => {
+      const arr = [...prev];
+      const a = arr.findIndex((n) => n.id === fromId);
+      const b = arr.findIndex((n) => n.id === toId);
+      if (a < 0 || b < 0) return prev;
+      const [moved] = arr.splice(a, 1);
+      arr.splice(b, 0, moved);
+      return arr;
+    });
   };
 
-  /* DnD desktop - solo con maniglia */
+  /* DnD desktop - handle */
   const onHandleDragStart = (id) => (e) => {
     if (isCoarse) return;
     e.dataTransfer.setData("text/plain", id);
@@ -113,7 +153,7 @@ export default function App() {
   const onHandleTouchMove = () => (e) => {
     if (!isCoarse) return;
     if (!dragging.current) return;
-    e.preventDefault(); // disabilita lo scroll durante il drag
+    e.preventDefault();
   };
   const onHandleTouchEnd = () => (e) => {
     if (!isCoarse) return;
@@ -125,6 +165,8 @@ export default function App() {
     if (drop) reorder(dragging.current.id, drop.getAttribute("data-note-id"));
     dragging.current = null;
   };
+
+  const dragging = useRef(null);
 
   return (
     <div className="min-h-dvh bg-black">
@@ -155,7 +197,6 @@ export default function App() {
               <span className="opacity-80">⌘V</span><span>Incolla</span>
             </button>
 
-            {/* niente capture -> galleria + camera */}
             <label className="btn-secondary w-full sm:flex-1 md:w-full cursor-pointer">
               <input type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
               <span role="img" aria-label="camera">📷</span><span>Aggiungi foto</span>
@@ -189,11 +230,8 @@ export default function App() {
               onDragOver={onCardDragOver(n.id)}
               onDrop={onCardDrop(n.id)}
             >
-              {/* Header card con maniglia */}
               <div className="card-title">
-                <time className="text-xs opacity-70" dateTime={String(n.createdAt)}>{fmt(n.createdAt)}</time>
-
-                {/* Maniglia DnD */}
+                <time className="text-xs opacity-70" dateTime={String(n.createdAt)}>{fmt(n.created_at || n.createdAt)}</time>
                 <button
                   className="drag-handle pill text-sm"
                   draggable={!isCoarse}
@@ -207,20 +245,17 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Immagine card: crop controllato; tap → viewer full-screen */}
-              {n.imageUrl && (
+              {n.image_url && (
                 <img
-                  src={n.imageUrl}
+                  src={n.image_url}
                   alt="nota"
                   className="w-full h-40 object-cover rounded-xl border border-white/10 mb-3"
-                  onClick={() => setViewer({ src: n.imageUrl, text: n.text })}
+                  onClick={() => setViewer({ src: n.image_url, text: n.text })}
                 />
               )}
 
-              {/* Testo */}
               {n.text && <p className="mb-3 whitespace-pre-wrap">{n.text}</p>}
 
-              {/* Azioni */}
               <div className="card-actions">
                 <button className="pill-danger" onClick={() => onDelete(n.id)}>Elimina</button>
                 <button className="pill" onClick={() => onEdit(n)}>Modifica</button>
@@ -232,7 +267,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Viewer full-screen */}
       {viewer && (
         <div className="modal-backdrop" onClick={() => setViewer(null)}>
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
