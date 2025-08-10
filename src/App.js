@@ -59,9 +59,14 @@ export default function App() {
 
   /* Clipboard & File */
   const onPasteText = async () => {
-    try { setDraft((p) => p + (await navigator.clipboard.readText())); }
-    catch { alert("Permessi clipboard mancanti."); }
-  };
+  try {
+    const text = await navigator.clipboard.readText();
+    setDraft((p) => p + text);
+  } catch {
+    alert("Permessi clipboard mancanti.");
+  }
+};
+
   const onFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
