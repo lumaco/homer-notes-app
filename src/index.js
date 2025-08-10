@@ -1,4 +1,4 @@
-import './index.css'; // <-- AGGIUNGI QUESTA RIGA
+iimport './tailwind.css'; // <-- MODIFICA QUESTA RIGA
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
