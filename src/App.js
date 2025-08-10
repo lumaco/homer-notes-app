@@ -292,13 +292,7 @@ export default function App() {
         </Modal>
       )}
       
-      <style>{`
-        .btn-primary{ @apply w-full md:w-auto px-4 py-2 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 transition; }
-        .btn-secondary{ @apply w-full md:w-auto px-4 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 transition; }
-        .btn-ghost{ @apply px-3 py-2 rounded-xl hover:bg-white/10 transition; }
-        .pill{ @apply px-2.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10; }
-        .pill.danger{ @apply hover:bg-red-500/20 border-red-500/30; }
-      `}</style>
+      <style>{}</style>
     </div>
   );
 }
