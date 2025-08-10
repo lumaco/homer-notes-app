@@ -18,10 +18,10 @@ export default function App() {
 
   // DnD state
   const isCoarse = matchMediaSafe("(pointer: coarse)");
-  const dragging = useRef(null);     // { id, x, y }
+  const dragging = useRef(null);
   const longPressTimer = useRef(null);
 
-  /** load/save (locale temporaneo) **/
+  /** load/save (local, in attesa di Neon) **/
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("notes") || "[]");
@@ -36,22 +36,14 @@ export default function App() {
   /** actions **/
   const createNote = () => {
     if (!draft.trim() && !imagePreview) return;
-    const n = {
-      id: uid(),
-      text: draft.trim(),
-      imageUrl: imagePreview,
-      createdAt: Date.now(),
-    };
+    const n = { id: uid(), text: draft.trim(), imageUrl: imagePreview, createdAt: Date.now() };
     saveNotes([n, ...notes]);
-    setDraft("");
-    setImagePreview(null);
+    setDraft(""); setImagePreview(null);
   };
   const onDelete = (id) => saveNotes(notes.filter((n) => n.id !== id));
   const onEdit = (note) => {
     const v = prompt("Modifica nota:", note.text || "");
-    if (v !== null) {
-      saveNotes(notes.map((n) => (n.id === note.id ? { ...n, text: v } : n)));
-    }
+    if (v !== null) saveNotes(notes.map((n) => (n.id === note.id ? { ...n, text: v } : n)));
   };
   const onShare = (note) => {
     const url = `${window.location.origin}/n/${note.id}`;
@@ -66,7 +58,7 @@ export default function App() {
       setDraft((p) => p + text);
     } catch { alert("Permessi clipboard mancanti."); }
   };
-  const onFileSelect = async (e) => {
+  const onFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -74,7 +66,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  /** Reorder helpers **/
+  /** reorder **/
   const reorder = (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
     const arr = [...notes];
@@ -86,26 +78,24 @@ export default function App() {
     saveNotes(arr);
   };
 
-  // Desktop DnD (HTML5)
+  // Desktop DnD
   const onDragStart = (id) => (e) => { if (isCoarse) return; e.dataTransfer.setData("text/plain", id); };
   const onDragOver  = (id) => (e) => { if (isCoarse) return; e.preventDefault(); };
   const onDrop      = (id) => (e) => { if (isCoarse) return; e.preventDefault(); reorder(e.dataTransfer.getData("text/plain"), id); };
 
-  // Mobile DnD (long-press + touch move)
+  // Mobile DnD (long-press)
   const onTouchStart = (id) => (e) => {
     if (!isCoarse) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     const t = e.touches[0];
-    longPressTimer.current = setTimeout(() => {
-      dragging.current = { id, x: t.clientX, y: t.clientY };
-    }, 180); // long-press breve
+    longPressTimer.current = setTimeout(() => { dragging.current = { id, x: t.clientX, y: t.clientY }; }, 180);
   };
-  const onTouchMove = (id) => (e) => {
+  const onTouchMove = () => (e) => {
     if (!isCoarse) return;
     if (!dragging.current) return;
-    e.preventDefault(); // evita scroll mentre trascino
+    e.preventDefault();
   };
-  const onTouchEnd = (id) => (e) => {
+  const onTouchEnd = () => (e) => {
     if (!isCoarse) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (!dragging.current) return;
@@ -145,7 +135,7 @@ export default function App() {
               <span className="opacity-80">⌘V</span><span>Incolla</span>
             </button>
 
-            {/* rimosso capture="environment" -> torna la galleria */}
+            {/* niente capture -> torna la galleria */}
             <label className="btn-secondary w-full sm:flex-1 md:w-full cursor-pointer">
               <input type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
               <span role="img" aria-label="camera">📷</span><span>Aggiungi foto</span>
@@ -193,11 +183,10 @@ export default function App() {
               )}
               {n.text && <p className="mb-3 whitespace-pre-wrap">{n.text}</p>}
 
-              {/* Azioni sempre visibili anche su mobile */}
               <div className="card-actions">
-                <button onClick={() => onDelete(n.id)} className="danger">Elimina</button>
-                <button onClick={() => onEdit(n)}>Modifica</button>
-                <button onClick={() => onShare(n)}>Condividi</button>
+                <button className="pill-danger" onClick={() => onDelete(n.id)}>Elimina</button>
+                <button className="pill" onClick={() => onEdit(n)}>Modifica</button>
+                <button className="pill" onClick={() => onShare(n)}>Condividi</button>
               </div>
 
               <div className="mt-2 text-xs opacity-70">
@@ -205,9 +194,7 @@ export default function App() {
               </div>
             </article>
           ))}
-          {notes.length === 0 && (
-            <p className="opacity-60">Nessuna nota presente.</p>
-          )}
+          {notes.length === 0 && <p className="opacity-60">Nessuna nota presente.</p>}
         </div>
       </main>
     </div>
