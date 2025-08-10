@@ -166,8 +166,6 @@ export default function App() {
     dragging.current = null;
   };
 
-  const dragging = useRef(null);
-
   return (
     <div className="min-h-dvh bg-black">
       {/* Header */}
