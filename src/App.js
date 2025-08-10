@@ -13,37 +13,29 @@ const fmt = (d) =>
 // Funzione per generare un ID univoco
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-// Interfaccia per le note
-interface Note {
-  id: string;
-  text?: string;
-  imageUrl?: string;
-  createdAt: string;
-}
-
 export default function App() {
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [notes, setNotes] = useState([]);
   const [draft, setDraft] = useState("");
-  const [imagePreview, setImagePreview] = useState<string | undefined>();
-  const [editing, setEditing] = useState<Note | null>(null);
-  const [sharing, setSharing] = useState<Note | null>(null);
-  const [viewing, setViewing] = useState<Note | null>(null);
+  const [imagePreview, setImagePreview] = useState(undefined);
+  const [editing, setEditing] = useState(null);
+  const [sharing, setSharing] = useState(null);
+  const [viewing, setViewing] = useState(null);
 
-  const draftRef = useRef<HTMLTextAreaElement | null>(null);
-  const dragId = useRef<string | null>(null); // Per il Drag & Drop su desktop
+  const draftRef = useRef(null);
+  const dragId = useRef(null); // Per il Drag & Drop su desktop
 
   // Stato per il Drag & Drop su mobile
   const isCoarse = useMemo(
     () => (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches) || false,
     []
   );
-  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const touchState = useRef<{ id: string; currentY: number } | null>(null);
+  const itemRefs = useRef({});
+  const touchState = useRef(null);
 
   // --- Azioni ---
   const onAddNote = () => {
     if (!draft && !imagePreview) return;
-    const n: Note = {
+    const n = {
       id: uid(),
       text: draft || undefined,
       imageUrl: imagePreview,
@@ -54,7 +46,7 @@ export default function App() {
     setImagePreview(undefined);
   };
 
-  const onDelete = (id: string) => setNotes((prev) => prev.filter((n) => n.id !== id));
+  const onDelete = (id) => setNotes((prev) => prev.filter((n) => n.id !== id));
 
   const onEditSave = () => {
     if (!editing) return;
@@ -62,7 +54,7 @@ export default function App() {
     setEditing(null);
   };
 
-  const onShare = (note: Note) => {
+  const onShare = (note) => {
     const shareUrl = `${window.location.origin}/n/${note.id}`;
     if (navigator.share) {
       navigator.share({ title: "Nota", text: note.text || "", url: shareUrl });
@@ -72,17 +64,17 @@ export default function App() {
   };
   
   // --- Drag & Drop Desktop ---
-  const handleDragStart = (id: string) => (e: React.DragEvent) => {
+  const handleDragStart = (id) => (e) => {
     if (isCoarse) return;
     dragId.current = id;
     e.dataTransfer.effectAllowed = "move";
   };
-  const handleDragOver = (id: string) => (e: React.DragEvent) => {
+  const handleDragOver = (id) => (e) => {
     if (isCoarse) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
-  const handleDrop = (id: string) => (e: React.DragEvent) => {
+  const handleDrop = (id) => (e) => {
     if (isCoarse) return;
     e.preventDefault();
     const from = dragId.current;
@@ -91,7 +83,7 @@ export default function App() {
     dragId.current = null;
   };
 
-  const reorderById = (fromId: string, toId: string) => {
+  const reorderById = (fromId, toId) => {
     setNotes((prev) => {
       const arr = [...prev];
       const fromIdx = arr.findIndex((n) => n.id === fromId);
@@ -104,12 +96,12 @@ export default function App() {
   };
 
   // --- Drag & Drop Mobile (Touch) ---
-  const onTouchStartItem = (id: string) => (e: React.TouchEvent) => {
+  const onTouchStartItem = (id) => (e) => {
     if (!isCoarse) return;
     touchState.current = { id, currentY: e.touches[0]?.clientY ?? 0 };
     document.body.style.touchAction = "none"; // Blocca lo scroll della pagina
 
-    const onMove = (ev: TouchEvent) => {
+    const onMove = (ev) => {
       if (!touchState.current) return;
       ev.preventDefault();
       const y = ev.touches[0]?.clientY ?? 0;
@@ -131,9 +123,9 @@ export default function App() {
     const onEnd = () => {
       document.body.style.touchAction = "";
       touchState.current = null;
-      window.removeEventListener("touchmove", onMove, { capture: true } as any);
-      window.removeEventListener("touchend", onEnd, { capture: true } as any);
-      window.removeEventListener("touchcancel", onEnd, { capture: true } as any);
+      window.removeEventListener("touchmove", onMove, { capture: true });
+      window.removeEventListener("touchend", onEnd, { capture: true });
+      window.removeEventListener("touchcancel", onEnd, { capture: true });
     };
 
     window.addEventListener("touchmove", onMove, { passive: false, capture: true });
@@ -155,12 +147,11 @@ export default function App() {
       throw new Error("readText non disponibile");
     } catch {
       draftRef.current?.focus();
-      // Potremmo usare un modal custom invece di alert
       console.warn("Incolla con scorciatoia (⌘V / Ctrl+V).");
     }
   };
 
-  const onFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = await blobToDataURL(file);
@@ -172,10 +163,9 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/30 backdrop-blur-xl">
         <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
-          {/* LOGO SOSTITUITO */}
           <div className="relative h-14 w-14 shrink-0">
             <img
-              src="/logo-homer.png" // Assicurati che il file sia in public/logo-homer.png
+              src="/logo-homer.png"
               alt="Homer logo"
               className="h-14 w-14 rounded-2xl object-cover border border-white/10 shadow-[0_0_24px_-6px] shadow-sky-500/50"
             />
@@ -302,7 +292,6 @@ export default function App() {
         </Modal>
       )}
       
-      {/* Stili globali per i bottoni dei modal */}
       <style>{`
         .btn-primary{ @apply w-full md:w-auto px-4 py-2 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 transition; }
         .btn-secondary{ @apply w-full md:w-auto px-4 py-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/15 transition; }
@@ -315,9 +304,9 @@ export default function App() {
 }
 
 // Componente Modal generico
-function Modal({ children, title, onClose }:{ children: React.ReactNode, title: string, onClose: () => void }){
+function Modal({ children, title, onClose }){
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -336,7 +325,7 @@ function Modal({ children, title, onClose }:{ children: React.ReactNode, title: 
 }
 
 // Funzione helper per convertire Blob in Data URL
-async function blobToDataURL(blob: Blob): Promise<string> {
+async function blobToDataURL(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
