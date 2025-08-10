@@ -13,21 +13,26 @@ body { @apply bg-black text-zinc-100 overflow-x-hidden overscroll-contain; }
 
 /* Pill badges */
 .pill{ @apply px-2.5 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10; }
-/* Variante “danger” separata per evitare dipendenze circolari */
 .pill-danger{ @apply px-2.5 py-1.5 rounded-full border border-red-500/30 bg-white/5 hover:bg-red-500/20; }
 
 /* Layout */
 .composer{ @apply flex flex-col md:flex-row gap-3 md:gap-4 items-stretch min-w-0 p-3 md:p-4 rounded-3xl; }
 .btn-group{ @apply flex flex-col sm:flex-row sm:flex-wrap md:flex-col gap-2 md:w-56 w-full min-w-0; }
 
-/* Effetti neon */
+/* Effetti neon (alone blu) */
 .neon-panel{ @apply border border-white/10 bg-black/40 shadow-[0_0_120px_-40px] shadow-sky-500/40; }
-.note-card{ @apply shadow-[0_0_80px_-40px] shadow-sky-500/20; }
+.note-card{ @apply border border-white/10 bg-white/5 rounded-2xl shadow-[0_0_80px_-40px] shadow-sky-500/25; }
 
-/* DnD mobile */
-@media (pointer: coarse) {
-  .note-card { touch-action: none; }
-}
+/* DnD mobile: lo scroll della lista resta naturale.
+   La card scorre (pan-y), la maniglia gestisce il drag. */
+.note-card { touch-action: pan-y; }
+.drag-handle { touch-action: none; }
 
-/* Azioni nelle card: layout, non stili dei bottoni (evita @apply pill qui) */
+/* Azioni card */
+.card-title { @apply flex items-center justify-between mb-2; }
 .card-actions { @apply flex gap-2 items-center; }
+
+/* Modale full-screen */
+.modal-backdrop{ @apply fixed inset-0 z-50 grid place-items-center bg-black/70 backdrop-blur-sm p-4; }
+.modal-panel{ @apply w-full max-w-3xl rounded-2xl border border-white/10 bg-zinc-900/90 p-4 shadow-[0_0_120px_-40px] shadow-sky-500/40; }
+

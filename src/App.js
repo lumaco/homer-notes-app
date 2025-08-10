@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-/** Helpers **/
+/* Utils */
 const fmt = (d) =>
   new Date(d).toLocaleString(undefined, {
     year: "numeric",
@@ -10,18 +10,24 @@ const fmt = (d) =>
     minute: "2-digit",
   });
 const uid = () => Math.random().toString(36).slice(2, 10);
+const mm = (q) => {
+  try { return !!(window.matchMedia && window.matchMedia(q).matches); }
+  catch { return false; }
+};
 
 export default function App() {
   const [notes, setNotes] = useState([]);
   const [draft, setDraft] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
+  const [viewer, setViewer] = useState(null); // {src, text}
 
-  // DnD state
-  const isCoarse = matchMediaSafe("(pointer: coarse)");
-  const dragging = useRef(null);
-  const longPressTimer = useRef(null);
+  const isCoarse = mm("(pointer: coarse)");
 
-  /** load/save (local, in attesa di Neon) **/
+  /* DnD state (handle-based) */
+  const dragging = useRef(null);       // {id}
+  const longPressTimer = useRef(null);  // mobile long-press
+
+  /* Storage (temporaneo: localStorage) */
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("notes") || "[]");
@@ -33,7 +39,7 @@ export default function App() {
     try { localStorage.setItem("notes", JSON.stringify(arr)); } catch {}
   };
 
-  /** actions **/
+  /* CRUD */
   const createNote = () => {
     if (!draft.trim() && !imagePreview) return;
     const n = { id: uid(), text: draft.trim(), imageUrl: imagePreview, createdAt: Date.now() };
@@ -51,12 +57,10 @@ export default function App() {
     else navigator.clipboard.writeText(url);
   };
 
-  /** clipboard & files **/
+  /* Clipboard & File */
   const onPasteText = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      setDraft((p) => p + text);
-    } catch { alert("Permessi clipboard mancanti."); }
+    try { setDraft((p) => p + (await navigator.clipboard.readText())); }
+    catch { alert("Permessi clipboard mancanti."); }
   };
   const onFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -66,7 +70,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  /** reorder **/
+  /* Reorder */
   const reorder = (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
     const arr = [...notes];
@@ -78,24 +82,35 @@ export default function App() {
     saveNotes(arr);
   };
 
-  // Desktop DnD
-  const onDragStart = (id) => (e) => { if (isCoarse) return; e.dataTransfer.setData("text/plain", id); };
-  const onDragOver  = (id) => (e) => { if (isCoarse) return; e.preventDefault(); };
-  const onDrop      = (id) => (e) => { if (isCoarse) return; e.preventDefault(); reorder(e.dataTransfer.getData("text/plain"), id); };
+  /* DnD desktop - solo con maniglia */
+  const onHandleDragStart = (id) => (e) => {
+    if (isCoarse) return;
+    e.dataTransfer.setData("text/plain", id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onCardDragOver = (id) => (e) => {
+    if (isCoarse) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const onCardDrop = (id) => (e) => {
+    if (isCoarse) return;
+    e.preventDefault();
+    reorder(e.dataTransfer.getData("text/plain"), id);
+  };
 
-  // Mobile DnD (long-press)
-  const onTouchStart = (id) => (e) => {
+  /* DnD mobile - long press sulla maniglia */
+  const onHandleTouchStart = (id) => (e) => {
     if (!isCoarse) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    const t = e.touches[0];
-    longPressTimer.current = setTimeout(() => { dragging.current = { id, x: t.clientX, y: t.clientY }; }, 180);
+    longPressTimer.current = setTimeout(() => { dragging.current = { id }; }, 180);
   };
-  const onTouchMove = () => (e) => {
+  const onHandleTouchMove = () => (e) => {
     if (!isCoarse) return;
     if (!dragging.current) return;
-    e.preventDefault();
+    e.preventDefault(); // disabilita lo scroll durante il drag
   };
-  const onTouchEnd = () => (e) => {
+  const onHandleTouchEnd = () => (e) => {
     if (!isCoarse) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (!dragging.current) return;
@@ -135,7 +150,7 @@ export default function App() {
               <span className="opacity-80">⌘V</span><span>Incolla</span>
             </button>
 
-            {/* niente capture -> torna la galleria */}
+            {/* niente capture -> galleria + camera */}
             <label className="btn-secondary w-full sm:flex-1 md:w-full cursor-pointer">
               <input type="file" accept="image/*" className="hidden" onChange={onFileSelect} />
               <span role="img" aria-label="camera">📷</span><span>Aggiungi foto</span>
@@ -157,7 +172,7 @@ export default function App() {
       <main className="mx-auto max-w-6xl px-4 pb-20">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm uppercase tracking-wider">Le tue note</h2>
-          <span className="text-xs opacity-60">Trascina per riordinare</span>
+          <span className="text-xs opacity-60">Trascina con ☰ per riordinare</span>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,44 +180,69 @@ export default function App() {
             <article
               key={n.id}
               data-note-id={n.id}
-              className="note-card p-4 rounded-2xl bg-white/5 border border-white/10"
-              draggable={!isCoarse}
-              onDragStart={onDragStart(n.id)}
-              onDragOver={onDragOver(n.id)}
-              onDrop={onDrop(n.id)}
-              onTouchStart={onTouchStart(n.id)}
-              onTouchMove={onTouchMove(n.id)}
-              onTouchEnd={onTouchEnd(n.id)}
+              className="note-card p-4"
+              onDragOver={onCardDragOver(n.id)}
+              onDrop={onCardDrop(n.id)}
             >
+              {/* Header card con maniglia */}
+              <div className="card-title">
+                <time className="text-xs opacity-70" dateTime={String(n.createdAt)}>{fmt(n.createdAt)}</time>
+
+                {/* Maniglia DnD */}
+                <button
+                  className="drag-handle pill text-sm"
+                  draggable={!isCoarse}
+                  onDragStart={onHandleDragStart(n.id)}
+                  onTouchStart={onHandleTouchStart(n.id)}
+                  onTouchMove={onHandleTouchMove(n.id)}
+                  onTouchEnd={onHandleTouchEnd(n.id)}
+                  title="Trascina per riordinare"
+                >
+                  ☰
+                </button>
+              </div>
+
+              {/* Immagine card: crop controllato; tap → viewer full-screen */}
               {n.imageUrl && (
                 <img
                   src={n.imageUrl}
                   alt="nota"
                   className="w-full h-40 object-cover rounded-xl border border-white/10 mb-3"
+                  onClick={() => setViewer({ src: n.imageUrl, text: n.text })}
                 />
               )}
+
+              {/* Testo */}
               {n.text && <p className="mb-3 whitespace-pre-wrap">{n.text}</p>}
 
+              {/* Azioni */}
               <div className="card-actions">
                 <button className="pill-danger" onClick={() => onDelete(n.id)}>Elimina</button>
                 <button className="pill" onClick={() => onEdit(n)}>Modifica</button>
                 <button className="pill" onClick={() => onShare(n)}>Condividi</button>
-              </div>
-
-              <div className="mt-2 text-xs opacity-70">
-                <time dateTime={String(n.createdAt)}>{fmt(n.createdAt)}</time>
               </div>
             </article>
           ))}
           {notes.length === 0 && <p className="opacity-60">Nessuna nota presente.</p>}
         </div>
       </main>
+
+      {/* Viewer full-screen */}
+      {viewer && (
+        <div className="modal-backdrop" onClick={() => setViewer(null)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={viewer.src}
+              alt="nota"
+              className="max-h-[70vh] w-full object-contain rounded-xl border border-white/10 mb-3"
+            />
+            {viewer.text && <p className="whitespace-pre-wrap">{viewer.text}</p>}
+            <div className="mt-3 flex justify-end">
+              <button className="btn-ghost" onClick={() => setViewer(null)}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
-
-/** Utils **/
-function matchMediaSafe(q){
-  try { return !!(window.matchMedia && window.matchMedia(q).matches); }
-  catch { return false; }
 }
