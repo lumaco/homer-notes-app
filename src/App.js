@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import imageCompression from "browser-image-compression";
 
 /* Utils */
 const fmt = (d) =>
@@ -9,11 +10,17 @@ const fmt = (d) =>
     hour: "2-digit",
     minute: "2-digit",
   });
-const uid = () => Math.random().toString(36).slice(2, 10);
 const mm = (q) => {
   try { return !!(window.matchMedia && window.matchMedia(q).matches); }
   catch { return false; }
 };
+const fileToDataURL = (file) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
 
 export default function App() {
   const [notes, setNotes] = useState([]);
@@ -22,8 +29,6 @@ export default function App() {
   const [viewer, setViewer] = useState(null);
 
   const isCoarse = mm("(pointer: coarse)");
-
-  /* DnD state (handle-based) */
   const dragging = useRef(null);
   const longPressTimer = useRef(null);
 
@@ -39,28 +44,46 @@ export default function App() {
       alert("Errore caricamento note dal server");
     }
   };
-
   useEffect(() => { fetchNotes(); }, []);
 
-  /* CRUD Neon */
+  /* CREATE — Aggiornamento ottimistico + reset immediato input */
   const createNote = async () => {
     if (!draft.trim() && !imagePreview) return;
+
+    // nota “finta” per feedback immediato
+    const tempId = `temp-${Date.now()}`;
+    const tempNote = {
+      id: tempId,
+      text: draft.trim(),
+      image_url: imagePreview || null,
+      created_at: new Date().toISOString(),
+    };
+    setNotes((prev) => [tempNote, ...prev]);     // UI istantanea
+    setDraft("");                                // pulisco input
+    setImagePreview(null);                       // pulisco preview
+
     try {
       const res = await fetch("/api/addNote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: draft.trim(), image_url: imagePreview }),
+        body: JSON.stringify({ text: tempNote.text, image_url: tempNote.image_url }),
       });
       if (!res.ok) throw new Error("Errore creazione nota");
-      const newNote = await res.json();
-      setNotes((prev) => [newNote, ...prev]);
-      setDraft(""); setImagePreview(null);
+      const saved = await res.json();
+
+      // rimpiazzo la temp con quella reale dal DB
+      setNotes((prev) => prev.map((n) => (n.id === tempId ? saved : n)));
     } catch (err) {
       console.error(err);
+      // rimuovo la temp e ripristino input in caso di errore
+      setNotes((prev) => prev.filter((n) => n.id !== tempId));
+      setDraft(tempNote.text);
+      setImagePreview(tempNote.image_url);
       alert("Errore salvataggio nota");
     }
   };
 
+  /* DELETE */
   const onDelete = async (id) => {
     try {
       const res = await fetch(`/api/deleteNote?id=${id}`, { method: "DELETE" });
@@ -72,6 +95,7 @@ export default function App() {
     }
   };
 
+  /* EDIT */
   const onEdit = async (note) => {
     const v = prompt("Modifica nota:", note.text || "");
     if (v === null) return;
@@ -90,13 +114,14 @@ export default function App() {
     }
   };
 
+  /* SHARE */
   const onShare = (note) => {
     const url = `${window.location.origin}/n/${note.id}`;
     if (navigator.share) navigator.share({ title: "Nota", text: note.text, url });
     else navigator.clipboard.writeText(url);
   };
 
-  /* Clipboard & File */
+  /* Clipboard */
   const onPasteText = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -105,15 +130,27 @@ export default function App() {
       alert("Permessi clipboard mancanti.");
     }
   };
-  const onFileSelect = (e) => {
+
+  /* File select — compressione lato client prima di convertire in base64 */
+  const onFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(String(reader.result));
-    reader.readAsDataURL(file);
+    try {
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1280,
+        useWebWorker: true,
+      };
+      const compressed = await imageCompression(file, options);
+      const dataUrl = await fileToDataURL(compressed);
+      setImagePreview(dataUrl);
+    } catch (err) {
+      console.error("Errore compressione immagine:", err);
+      alert("Impossibile comprimere l'immagine.");
+    }
   };
 
-  /* Reorder (solo lato client per ora) */
+  /* Reorder (solo client) */
   const reorder = (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
     setNotes((prev) => {
